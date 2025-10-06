@@ -1,0 +1,22 @@
+{
+  "name": "ai-blog-client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "0.17.6",
+    "next": "14.2.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-markdown": "9.0.1",
+    "remark-gfm": "3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.6.2",
+    "typescript": "5.9.3"
+  }
+}

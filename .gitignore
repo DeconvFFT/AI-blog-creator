@@ -1,0 +1,44 @@
+# Node.js / TypeScript / React (tsx)
+node_modules/
+dist/
+build/
+.env
+.env.*
+*.log
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.venv
+env/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+
+# Images
+*.png
+
+# Next.js build output
+client/.next/
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.webp
+*.ico
+
+# Sensitive files
+secrets.*
+config.*
+credentials.*
+.DS_Store
+.idea/
+.vscode/
+*.sqlite3
+*.db

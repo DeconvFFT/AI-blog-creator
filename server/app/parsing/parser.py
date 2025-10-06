@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+import io
+import zipfile
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from bs4 import BeautifulSoup
+from pypdf import PdfReader
+from docx import Document as DocxDocument
+
+from ..schemas import ImageRef, ParsedBundle, TableRef
+from ..utils import save_image_bytes
+
+
+def _parse_txt(data: bytes) -> ParsedBundle:
+    text = data.decode(errors="ignore")
+    return ParsedBundle(text=text, html=f"<pre>{BeautifulSoup(text, 'html.parser').text}</pre>")
+
+
+def _parse_md(data: bytes) -> ParsedBundle:
+    # Minimal: treat as text; client/editor can render further
+    text = data.decode(errors="ignore")
+    return ParsedBundle(text=text, html=None)
+
+
+def _parse_pdf(data: bytes) -> ParsedBundle:
+    reader = PdfReader(io.BytesIO(data))
+    text_parts: List[str] = []
+    for page in reader.pages:
+        try:
+            text_parts.append(page.extract_text() or "")
+        except Exception:
+            pass
+    text = "\n\n".join(t.strip() for t in text_parts if t)
+    # Images extraction from PDFs is non-trivial; recommend Docling for full fidelity
+    return ParsedBundle(text=text)
+
+
+def _parse_docx(data: bytes) -> ParsedBundle:
+    # Extract text via python-docx
+    buf = io.BytesIO(data)
+    doc = DocxDocument(buf)
+    paras = [p.text for p in doc.paragraphs]
+    text = "\n".join(paras)
+
+    # Extract embedded images by reading the docx as zip
+    images: List[ImageRef] = []
+    z = zipfile.ZipFile(io.BytesIO(data))
+    for name in z.namelist():
+        if name.startswith("word/media/"):
+            img_bytes = z.read(name)
+            url = save_image_bytes(img_bytes, Path(name).name)
+            images.append(ImageRef(url=url))
+
+    # Tables as plain text
+    tables: List[TableRef] = []
+    for t in doc.tables:
+        cells = [[cell.text for cell in row.cells] for row in t.rows]
+        tables.append(TableRef(data=cells))
+
+    return ParsedBundle(text=text, images=images, tables=tables)
+
+
+def _parse_html(data: bytes) -> ParsedBundle:
+    soup = BeautifulSoup(data, "html.parser")
+    text = soup.get_text("\n", strip=True)
+    images: List[ImageRef] = []
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        if src and src.startswith("http"):
+            images.append(ImageRef(url=src, alt=img.get("alt")))
+    return ParsedBundle(text=text, html=str(soup), images=images)
+
+
+def parse_any(filename: str, data: bytes) -> ParsedBundle:
+    suffix = Path(filename.lower()).suffix
+    if suffix in {".txt"}:
+        return _parse_txt(data)
+    if suffix in {".md", ".markdown"}:
+        return _parse_md(data)
+    if suffix in {".pdf"}:
+        return _parse_pdf(data)
+    if suffix in {".docx"}:
+        return _parse_docx(data)
+    if suffix in {".html", ".htm"}:
+        return _parse_html(data)
+    # Fallback: best-effort text
+    return _parse_txt(data)
+
+
+def parse_with_docling(filename: str, data: bytes) -> Optional[ParsedBundle]:
+    """Attempt to parse using Docling if available.
+
+    Tries common Docling APIs and maps results to ParsedBundle.
+    Falls back to None if Docling is not installed or an error occurs.
+    """
+    try:
+        import io as _io
+        import mimetypes
+
+        try:
+            # Preferred modern API
+            from docling.document_converter import DocumentConverter, InputDocument  # type: ignore
+
+            converter = DocumentConverter()
+            mime, _ = mimetypes.guess_type(filename)
+            doc = InputDocument(file_like=_io.BytesIO(data), filename=filename, mime_type=mime)
+            res = converter.convert(doc)
+
+            text = getattr(res, "text", None) or getattr(res, "plaintext", None)
+            html = getattr(res, "html", None)
+            images: List[ImageRef] = []
+            if hasattr(res, "images") and res.images:
+                for im in res.images:
+                    name = getattr(im, "name", "image.png")
+                    content = getattr(im, "content", None) or getattr(im, "bytes", None)
+                    if content:
+                        url = save_image_bytes(content, name)
+                        images.append(ImageRef(url=url))
+            tables: List[TableRef] = []
+            if hasattr(res, "tables") and res.tables:
+                for tbl in res.tables:
+                    thtml = getattr(tbl, "html", None)
+                    tdata = getattr(tbl, "data", None)
+                    tables.append(TableRef(html=thtml, data=tdata))
+            meta = getattr(res, "meta", None) or {}
+
+            return ParsedBundle(text=text, html=html, images=images, tables=tables, meta=meta)
+        except Exception:
+            # Older or different API surface
+            try:
+                from docling import Document  # type: ignore
+                d = Document.from_bytes(data, filename=filename)
+                text = getattr(d, "text", None)
+                html = getattr(d, "html", None)
+                images: List[ImageRef] = []
+                if hasattr(d, "images"):
+                    for im in d.images:
+                        content = getattr(im, "content", None) or getattr(im, "bytes", None)
+                        name = getattr(im, "name", "image.png")
+                        if content:
+                            url = save_image_bytes(content, name)
+                            images.append(ImageRef(url=url))
+                tables: List[TableRef] = []
+                if hasattr(d, "tables"):
+                    for tbl in d.tables:
+                        tables.append(TableRef(html=getattr(tbl, "html", None), data=getattr(tbl, "data", None)))
+                return ParsedBundle(text=text, html=html, images=images, tables=tables)
+            except Exception:
+                return None
+    except Exception:
+        return None
