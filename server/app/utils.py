@@ -47,3 +47,17 @@ def make_slug(title: str) -> str:
     s = slugify(title)
     return s or f"post-{secrets.token_hex(3)}"
 
+
+def unique_slug(db, base: str) -> str:
+    """Ensure slug is unique by appending a numeric suffix if needed."""
+    slug = base
+    i = 2
+    from .models import BlogPost  # local import to avoid cycles
+    exists = lambda s: db.query(BlogPost).filter(BlogPost.slug == s).first() is not None
+    while exists(slug):
+        slug = f"{base}-{i}"
+        i += 1
+        if i > 1000:
+            slug = f"{base}-{secrets.token_hex(3)}"
+            break
+    return slug

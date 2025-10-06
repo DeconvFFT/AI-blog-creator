@@ -49,6 +49,7 @@ services:
     command: bash -lc "npm i && HOST=0.0.0.0 npm run dev"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      SERVER_API_BASE_URL: http://server:8000
     ports:
       - "3001:3000"
     volumes:

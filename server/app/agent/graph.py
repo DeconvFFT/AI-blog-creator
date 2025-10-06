@@ -87,8 +87,9 @@ def node_align_media(state: ParseState) -> ParseState:
     system = (
         "You are aligning extracted media with text. Insert Markdown image tags (e.g., ![alt](URL))"
         " at the most contextually appropriate positions within the provided content."
-        " If a table has data or HTML, insert a best-effort Markdown table or a placeholder like [Table N]"
-        " where it fits. Do not invent content; preserve order and meaning. Return ONLY Markdown."
+        " If a table has data or HTML, render it as a valid GitHub Flavored Markdown table using pipe syntax"
+        " (include a header row and separator), otherwise insert a [Table N] placeholder."
+        " Do not invent content; preserve order and meaning. Return ONLY Markdown."
     )
     user = (
         "Content to align (Markdown or plaintext):\n\n" + base_text +
@@ -123,7 +124,8 @@ def node_refine_llm(state: ParseState) -> ParseState:
         return {}
     system = (
         "You are a meticulous technical editor. Clean and structure the text into well-formed Markdown,"
-        " preserving headings, lists, code blocks, tables (as Markdown), and image references."
+        " preserving headings, lists, code blocks, and image references."
+        " Ensure any table content is represented as valid GitHub Flavored Markdown tables using pipe syntax."
     )
     user = (
         "Refine the following extracted content for a blog post. Convert any HTML fragments to clean Markdown."
@@ -157,13 +159,17 @@ parse_graph = build_parse_graph()
 # Section refiner: refine arbitrary markdown/plaintext
 def node_section_refiner(state: Dict[str, Any]) -> Dict[str, Any]:
     text = (state.get("input_text") or "").strip()
+    instructions = (state.get("instructions") or "").strip()
     if not text:
         return {"refined": ""}
     system = (
         "You are a meticulous technical editor. Clean and structure the text into well-formed Markdown,"
         " preserving headings, lists, code blocks, tables (as Markdown), and image references."
-        " Do not change meaning or introduce new facts. Return ONLY Markdown."
+        " Do not introduce new facts. You may polish tone for clarity and professionalism. "
+        "Return ONLY Markdown."
     )
+    if instructions:
+        system = system + " Additional user instructions (follow strictly): " + instructions
     user = text
     refined = llm_client.chat([
         {"role": "system", "content": system},
@@ -181,3 +187,31 @@ def build_refine_graph():
 
 
 refine_graph = build_refine_graph()
+
+
+# Blog summary graph
+def node_blog_summary(state: Dict[str, Any]) -> Dict[str, Any]:
+    text = (state.get("input_text") or "").strip()
+    if not text:
+        return {"summary": ""}
+    system = (
+        "You are a helpful writing assistant. Summarize the following blog content in 2-4 concise sentences,"
+        " capturing the main points and takeaways. Avoid marketing fluff."
+    )
+    user = text
+    summary = llm_client.chat([
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ])
+    return {"summary": summary}
+
+
+def build_summary_graph():
+    g = StateGraph(dict)
+    g.add_node("blog_summary", RunnableLambda(node_blog_summary))
+    g.set_entry_point("blog_summary")
+    g.add_edge("blog_summary", END)
+    return g.compile()
+
+
+summary_graph = build_summary_graph()

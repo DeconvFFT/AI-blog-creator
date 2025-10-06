@@ -49,3 +49,10 @@ def cache_json_get(key: str) -> Optional[Any]:
 def cache_json_set(key: str, obj: Any, ttl: Optional[int] = None) -> None:
     cache_set(key, json.dumps(obj), ttl)
 
+
+def cache_delete(key: str) -> None:
+    try:
+        r = get_redis()
+        r.delete(key)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("cache_delete error: %s", e)

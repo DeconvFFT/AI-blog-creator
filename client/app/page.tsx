@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -18,7 +20,9 @@ type ParsedBundle = {
 };
 
 export default function Home() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
+  const [fileLabel, setFileLabel] = useState<string>("");
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [bundle, setBundle] = useState<ParsedBundle | null>(null);
@@ -27,6 +31,11 @@ export default function Home() {
   const [overwrite, setOverwrite] = useState(false);
   const [refine, setRefine] = useState(true);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const [showRefine, setShowRefine] = useState(false);
+  const [refineBusy, setRefineBusy] = useState(false);
+  const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
+  const [refinedDraft, setRefinedDraft] = useState<string | null>(null);
+  const [refineHint, setRefineHint] = useState<string>("");
 
   async function parseUpload() {
     setLoading(true);
@@ -70,7 +79,12 @@ export default function Home() {
       });
       if (!resp.ok) throw new Error(await resp.text());
       const data = await resp.json();
-      alert(`Posted: ${data.slug}`);
+      // Navigate to the new post page
+      if (data?.slug) {
+        router.push(`/blog/${data.slug}`);
+      } else {
+        router.push('/blog');
+      }
     } catch (e: any) {
       alert(`Submit failed: ${e.message || e}`);
     }
@@ -125,61 +139,88 @@ export default function Home() {
   }
 
   return (
+    <>
     <main>
-      <section style={{ display: 'grid', gap: 16 }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: 8 }}>Upload document (txt, md, pdf, docx, html)</label>
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: 8 }}>Or parse from URL (Medium/Substack/etc.)</label>
-          <input style={{ width: '100%', padding: 8 }} placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <label><input type="checkbox" checked={refine} onChange={e => setRefine(e.target.checked)} /> Refine with LLM</label>
-          <label><input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} /> Overwrite instead of append</label>
-          <button onClick={parseUpload} disabled={loading}>{loading ? 'Parsing…' : 'Parse'}</button>
+      <section className="card card--bold">
+        <div className="card-body" style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <div className="section-title">Upload document (txt, md, pdf, docx, html, csv, json, xlsx)</div>
+            <div className="upload-wrap">
+              <input id="file-upload" className="visually-hidden" type="file" onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                setFile(f);
+                setFileLabel(f ? f.name : "");
+              }} />
+              <label htmlFor="file-upload" className="btn btn-primary">⬆ Upload file</label>
+              {fileLabel ? <span className="upload-filename">{fileLabel}</span> : null}
+            </div>
+          </div>
+          <div>
+            <div className="section-title">Or parse from URL (Medium/Substack/etc.)</div>
+            <input className="input" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label><input type="checkbox" checked={refine} onChange={e => setRefine(e.target.checked)} /> Refine with LLM</label>
+            <label><input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} /> Overwrite instead of append</label>
+            <button className="btn btn-primary" onClick={parseUpload} disabled={loading}>{loading ? 'Parsing…' : 'Parse'}</button>
+          </div>
         </div>
       </section>
 
-      <section style={{ marginTop: 24 }}>
-        <label style={{ display: 'block', marginBottom: 8 }}>Title</label>
-        <input style={{ width: '100%', padding: 8, fontSize: 18 }} value={title} onChange={(e) => setTitle(e.target.value)} />
+      <section className="section card">
+        <div className="card-body">
+          <div className="section-title">Title</div>
+          <input className="input" style={{ fontSize: 18 }} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
       </section>
 
-      <section style={{ marginTop: 16 }}>
-        <label style={{ display: 'block', marginBottom: 8 }}>Content (Markdown)</label>
-        <textarea
+      <section className="section card">
+        <div className="card-body">
+          <div className="section-title">Content (Markdown)</div>
+          <textarea
           ref={editorRef}
           onPaste={handlePaste}
-          style={{ width: '100%', height: 320, padding: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas' }}
+          onSelect={() => {
+            if (showRefine) return;
+            const ta = editorRef.current;
+            if (!ta) return;
+            const start = ta.selectionStart || 0;
+            const end = ta.selectionEnd || 0;
+            const text = ta.value.slice(start, end);
+            if (end > start && text.trim().length > 1) {
+              setSelection({ start, end, text });
+              setRefinedDraft(null);
+              setShowRefine(true);
+            }
+          }}
+          className="textarea"
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />
+        </div>
       </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h3 style={{ margin: '12px 0' }}>Preview</h3>
-        <div style={{
-          border: '1px solid #eee',
-          padding: 16,
-          borderRadius: 6,
-          background: '#fafafa'
-        }}>
-          <ReactMarkdown>{content || ""}</ReactMarkdown>
+      <section className="section card">
+        <div className="card-body">
+          <h3 style={{ margin: '0 0 8px 0' }}>Preview</h3>
+          <div className="md">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {content || ""}
+            </ReactMarkdown>
+          </div>
         </div>
       </section>
 
       {bundle?.images?.length ? (
-        <section style={{ marginTop: 16 }}>
+        <section className="section">
           <h3>Extracted Images</h3>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
             {bundle.images.map((img, i) => {
               const src = img.url?.startsWith('http') ? img.url : `${API_BASE}${img.url}`;
               return (
-              <div key={i} style={{ border: '1px solid #eee', padding: 8 }}>
-                <img src={src} alt={img.alt || ''} style={{ width: '100%', height: 120, objectFit: 'cover' }} />
-                <small style={{ wordBreak: 'break-all' }}>{src}</small>
+              <div key={i} className="sticker" style={{ padding: 8 }}>
+                <img src={src} alt={img.alt || ''} style={{ width: '100%', height: 140, objectFit: 'cover' }} />
+                <small style={{ wordBreak: 'break-all', color: 'var(--muted)' }}>{src}</small>
               </div>
               );
             })}
@@ -187,15 +228,102 @@ export default function Home() {
         </section>
       ) : null}
 
-      <section style={{ marginTop: 16 }}>
-        <h3>Add Diagram (Excalidraw)</h3>
-        <ExcalidrawBox />
+      <section className="section card card--bold">
+        <div className="card-body">
+          <h3 style={{ margin: 0 }}>Add Diagram (Excalidraw)</h3>
+          <ExcalidrawBox />
+        </div>
       </section>
 
-      <section style={{ marginTop: 24 }}>
-        <button onClick={submitPost}>Submit</button>
+      <section className="section">
+        <button className="btn btn-primary" onClick={submitPost}>Submit</button>
       </section>
     </main>
+    {showRefine && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#fff', borderRadius: 8, padding: 16, width: 'min(720px, 92vw)', boxShadow: '0 8px 30px rgba(0,0,0,0.2)' }}>
+          <h3 style={{ marginTop: 0 }}>Refine Selection</h3>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>Original</div>
+              <div style={{ border: '1px solid #eee', padding: 12, borderRadius: 6, maxHeight: 160, overflow: 'auto', background: '#fafafa', whiteSpace: 'pre-wrap' }}>
+                {selection?.text}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>Refined preview</div>
+              <div style={{ border: '1px solid #eee', padding: 12, borderRadius: 6, minHeight: 80, maxHeight: 160, overflow: 'auto', background: '#fff', whiteSpace: 'pre-wrap' }}>
+                {refinedDraft ?? 'Click Refine to preview…'}
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#666', marginBottom: 6 }}>What do you want to change? (optional)</label>
+              <textarea
+                value={refineHint}
+                onChange={(e) => setRefineHint(e.target.value)}
+                placeholder="E.g., simplify language, convert bullet list to table, fix headings, keep code blocks intact."
+                style={{ width: '100%', minHeight: 64, padding: 10, borderRadius: 6, border: '1px solid #eee', fontFamily: 'inherit' }}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn" onClick={() => { setShowRefine(false); setRefinedDraft(null); }} disabled={refineBusy}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              onClick={async () => {
+                if (!selection) return;
+                if (refinedDraft == null) {
+                  // First phase: refine and preview
+                  setRefineBusy(true);
+                  try {
+                    const resp = await fetch(`${API_BASE}/api/refine/section`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ text: selection.text, instructions: refineHint || undefined }),
+                    });
+                    if (!resp.ok) throw new Error(await resp.text());
+                    const data = await resp.json();
+                    const refined: string = data.refined || '';
+                    setRefinedDraft(refined);
+                  } catch (e: any) {
+                    alert(`Refine failed: ${e?.message || e}`);
+                  } finally {
+                    setRefineBusy(false);
+                  }
+                } else {
+                  // Second phase: rewrite selected text with refinedDraft
+                  const ta = editorRef.current;
+                  const refined = refinedDraft;
+                  if (ta) {
+                    const before = content.slice(0, selection.start);
+                    const after = content.slice(selection.end);
+                    const updated = `${before}${refined}${after}`;
+                    setContent(updated);
+                    setShowRefine(false);
+                    setRefinedDraft(null);
+                    setRefineHint("");
+                    // reset selection to the newly inserted range
+                    requestAnimationFrame(() => {
+                      try {
+                        const posStart = selection.start;
+                        const posEnd = selection.start + refined.length;
+                        ta.selectionStart = posStart;
+                        ta.selectionEnd = posEnd;
+                        ta.focus();
+                      } catch {}
+                    });
+                  }
+                }
+              }}
+              disabled={refineBusy}
+            >
+              {refineBusy ? 'Refining…' : (refinedDraft == null ? 'Refine' : 'Rewrite')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
 

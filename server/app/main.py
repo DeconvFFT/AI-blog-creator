@@ -19,14 +19,16 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.backend_cors_origins.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"]
-    ,
-    allow_headers=["*"]
-)
+cors_kwargs = {
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+origins = [o.strip() for o in settings.backend_cors_origins.split(",") if o.strip()]
+if settings.backend_cors_regex:
+    app.add_middleware(CORSMiddleware, allow_origin_regex=settings.backend_cors_regex, **cors_kwargs)
+else:
+    app.add_middleware(CORSMiddleware, allow_origins=origins, **cors_kwargs)
 
 app.include_router(posts.router)
 

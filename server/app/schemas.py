@@ -47,6 +47,7 @@ class PostOut(BaseModel):
     source_type: str
     source_url: Optional[str] = None
     meta: Optional[Any] = None
+    summary: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -65,6 +66,7 @@ class ParseOptions(BaseModel):
 
 class SectionRefineRequest(BaseModel):
     text: str
+    instructions: str | None = None
 
 
 class SectionRefineResponse(BaseModel):

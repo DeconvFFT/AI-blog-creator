@@ -18,7 +18,7 @@ Notes
 - Groq is preferred with model `GROQ_MODEL` (e.g., gpt-oss-120b). Fallback to Ollama (`OLLAMA_MODEL`, default gpt-oss-20b).
 - Redis cache TTL ~24 hours for blogs; eviction policy `allkeys-lfu` is configured.
 - Uploaded files are stored under `server/storage/` and served via `/static`.
-- Docling is used for parsing; if unavailable, a robust basic parser is used.
+- Docling is used for parsing; if unavailable, a robust basic parser is used. Image files (png/jpg/webp/tiff/gif) are OCR’d (Tesseract) so their text becomes editable.
 
 Development
 - Backend dev: `cd server && uvicorn app.main:app --reload`
