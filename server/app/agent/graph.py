@@ -28,14 +28,33 @@ class ParseState(Dict[str, Any]):
     """
 
 
+def _append_error(state: Dict[str, Any], msg: str) -> Dict[str, Any]:
+    errs = list(state.get("errors") or [])
+    errs.append(msg)
+    return {"errors": errs}
+
+
+def _safe_chat(messages: list[dict[str, str]]) -> tuple[str | None, str | None]:
+    try:
+        content = llm_client.chat(messages)
+        return content, None
+    except Exception as e:  # noqa: BLE001
+        return None, f"llm_error: {e}"
+
+
 def node_try_docling(state: ParseState) -> ParseState:
     filename = state.get("filename")
     data = state.get("data")
     if not filename or data is None:
         # Incomplete input; skip docling and let basic parser decide
         return {"parsed": None}
-    parsed = parse_with_docling(filename, data)
-    return {"parsed": parsed}
+    try:
+        parsed = parse_with_docling(filename, data)
+        return {"parsed": parsed}
+    except Exception as e:  # noqa: BLE001
+        upd = _append_error(state, f"docling_error: {e}")
+        upd["parsed"] = None
+        return upd  # type: ignore[return-value]
 
 
 def node_basic_parse(state: ParseState) -> ParseState:
@@ -95,14 +114,16 @@ def node_align_media(state: ParseState) -> ParseState:
         "Content to align (Markdown or plaintext):\n\n" + base_text +
         "\n\nMedia manifest:\n" + manifest
     )
-    try:
-        aligned = llm_client.chat([
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ])
-        return {"aligned_text": aligned}
-    except Exception:
-        return {}
+    aligned, err = _safe_chat([
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ])
+    updates: Dict[str, Any] = {}
+    if aligned:
+        updates["aligned_text"] = aligned
+    if err:
+        updates.update(_append_error(state, err))
+    return updates  # type: ignore[return-value]
 
 
 def node_refine_llm(state: ParseState) -> ParseState:
@@ -131,11 +152,16 @@ def node_refine_llm(state: ParseState) -> ParseState:
         "Refine the following extracted content for a blog post. Convert any HTML fragments to clean Markdown."
         " Make it clean, readable, and structured, without adding new content.\n\n" + text
     )
-    content = llm_client.chat([
+    content, err = _safe_chat([
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ])
-    return {"refined_text": content}
+    updates: Dict[str, Any] = {}
+    if content:
+        updates["refined_text"] = content
+    if err:
+        updates.update(_append_error(state, err))
+    return updates  # type: ignore[return-value]
 
 
 def build_parse_graph():

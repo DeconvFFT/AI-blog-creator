@@ -208,6 +208,16 @@ export default function Home() {
               {content || ""}
             </ReactMarkdown>
           </div>
+          {bundle?.meta && (bundle.meta as any)?.pipeline_errors?.length ? (
+            <div style={{ marginTop: 12, color: '#b91c1c', fontSize: 13 }}>
+              <strong>Parse notes:</strong>
+              <ul>
+                {((bundle.meta as any).pipeline_errors as string[]).map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </section>
 

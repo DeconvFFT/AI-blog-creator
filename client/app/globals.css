@@ -118,7 +118,19 @@ a:hover { text-decoration: underline; }
 }
 
 .sticker { background: var(--surface); border: 2px solid var(--outline); border-radius: 16px; box-shadow: 0 6px 0 var(--outline); }
-.sticker img, .md img { border-radius: 12px; display: block; }
+.sticker img, .md img {
+  border-radius: 12px;
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: var(--surface);
+  border: 2px solid var(--outline);
+  box-shadow: 0 4px 0 var(--outline);
+  padding: 6px;
+  margin: 10px auto;
+  max-height: 600px;
+  object-fit: contain;
+}
 
 /* Decorative header squiggles */
 .header { position: relative; }

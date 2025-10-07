@@ -194,10 +194,13 @@ async def parse_post(
     parsed: ParsedBundle | None = None
     aligned_text: str | None = None
     refined_text: str | None = None
+    errors: list[str] = []
     if isinstance(result, dict):
         parsed = result.get("parsed")
         aligned_text = result.get("aligned_text")
         refined_text = result.get("refined_text")
+        if result.get("errors"):
+            errors = list(result.get("errors"))
 
     if parsed is None:
         # Fallback without graph
@@ -264,6 +267,12 @@ async def parse_post(
         original_text = parsed.text
         parsed.meta = {"original_text_excerpt": (original_text or "")[:2000]}
         parsed.text = final_text
+
+    # attach pipeline errors if any
+    if errors:
+        meta = parsed.meta or {}
+        meta["pipeline_errors"] = errors
+        parsed.meta = meta
 
     cache_json_set(cache_key, json.loads(parsed.model_dump_json()))
     return parsed
