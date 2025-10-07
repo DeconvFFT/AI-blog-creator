@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
 # Ensure we run from the repo root, then start the FastAPI server on $PORT
 cd "$(dirname "$0")/server"

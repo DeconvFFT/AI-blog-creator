@@ -3,6 +3,11 @@
   command = "npm ci && npm run build"
   publish = ".next"
 
+  [build.environment]
+    NEXT_PUBLIC_API_BASE_URL = "https://ai-blog-creator-production.up.railway.app"
+    NEXT_PUBLIC_SITE_URL = "https://eclectic-elf-45002c.netlify.app"
+    SERVER_API_BASE_URL = "https://ai-blog-creator-production.up.railway.app"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

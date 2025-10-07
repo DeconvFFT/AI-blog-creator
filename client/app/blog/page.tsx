@@ -1,8 +1,8 @@
 import Link from "next/link";
 import BlogListClient from "../../components/BlogListClient";
 
-// Use docker network name for SSR to reach FastAPI from the Node container
-const API_BASE = process.env.SERVER_API_BASE_URL || "http://server:8000";
+// Prefer public API base (baked at build) and fall back to server var or docker alias
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.SERVER_API_BASE_URL || "http://server:8000";
 
 async function fetchPosts() {
   try {
