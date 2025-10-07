@@ -2,7 +2,8 @@
 set -eu
 
 # Ensure we run from the repo root, then start the FastAPI server on $PORT
-cd "$(dirname "$0")/server"
+# Move to repo root so we can import as `server.app.main`
+cd "$(dirname "$0")"
 
 PYTHON_BIN="${PYTHON_BIN:-}"
 if [ -z "$PYTHON_BIN" ]; then
@@ -33,7 +34,7 @@ fi
 # Ensure local server package is importable when invoking module entrypoint
 export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
 
-# Use the venv's python to run uvicorn so CWD is on sys.path
-exec python -m uvicorn app.main:app --app-dir . --host 0.0.0.0 --port "${PORT:-8000}"
+# Use the venv's python to run uvicorn for module `server.app.main`
+exec python -m uvicorn server.app.main:app --app-dir . --host 0.0.0.0 --port "${PORT:-8000}"
 
 
