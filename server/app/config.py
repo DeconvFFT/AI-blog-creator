@@ -15,8 +15,9 @@ class Settings(BaseSettings):
     redis_cache_ttl_seconds: int = Field(default=86400, alias="REDIS_CACHE_TTL_SECONDS")
 
     groq_api_key: str | None = Field(default=None, alias="GROQ_API_KEY")
-    groq_model: str = Field(default="openai/gpt-oss-120b", alias="GROQ_MODEL")
-    ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
+    groq_model: str = Field(default="llama3-8b-8192", alias="GROQ_MODEL")
+    # Empty by default so cloud deployments don't try to hit localhost
+    ollama_base_url: str | None = Field(default=None, alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="gpt-oss-20b", alias="OLLAMA_MODEL")
     llm_parse_mode: str = Field(default="require", alias="LLM_PARSE_MODE")  # require|prefer|off
 

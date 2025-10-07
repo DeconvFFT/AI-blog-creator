@@ -52,9 +52,7 @@ def node_try_docling(state: ParseState) -> ParseState:
         parsed = parse_with_docling(filename, data)
         return {"parsed": parsed}
     except Exception as e:  # noqa: BLE001
-        upd = _append_error(state, f"docling_error: {e}")
-        upd["parsed"] = None
-        return upd  # type: ignore[return-value]
+        raise Exception(f"Docling parsing failed: {e}")
 
 
 def node_basic_parse(state: ParseState) -> ParseState:

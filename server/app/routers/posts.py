@@ -267,7 +267,9 @@ async def parse_post(
 
     if parsed is None:
         # Fallback without graph
-        parsed = parse_with_docling(filename, data_bytes) or parse_any(filename, data_bytes)
+        parsed = parse_with_docling(filename, data_bytes)
+        if parsed is None:
+            raise HTTPException(status_code=500, detail="Docling parsing failed; unsupported format or error")
 
     # Fallback media alignment if graph failed to produce it
     if aligned_text is None and (refine_with_llm or settings.llm_parse_mode == "require"):
