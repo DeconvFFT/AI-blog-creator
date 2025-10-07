@@ -41,7 +41,8 @@ class Settings(BaseSettings):
 
         # Normalize common string envs (handles quoted values in .env)
         self.groq_api_key = _clean(self.groq_api_key)  # type: ignore[assignment]
-        self.groq_model = _clean(self.groq_model)  # type: ignore[assignment]
+        # Ensure model always has a valid default if env/.env is empty
+        self.groq_model = _clean(self.groq_model) or "llama3-8b-8192"  # type: ignore[assignment]
         self.ollama_base_url = _clean(self.ollama_base_url)  # type: ignore[assignment]
         self.ollama_model = _clean(self.ollama_model)  # type: ignore[assignment]
         self.llm_parse_mode = _clean(self.llm_parse_mode, lower=True) or "require"  # type: ignore[assignment]

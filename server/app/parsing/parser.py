@@ -189,64 +189,36 @@ def parse_any(filename: str, data: bytes) -> ParsedBundle:
 
 
 def parse_with_docling(filename: str, data: bytes) -> Optional[ParsedBundle]:
-    """Attempt to parse using Docling if available.
+    """Parse using Docling per basic usage: convert source and export to Markdown.
 
-    Tries common Docling APIs and maps results to ParsedBundle.
-    Falls back to None if Docling is not installed or an error occurs.
+    Writes the incoming bytes to a temporary file with the correct suffix, then
+    uses DocumentConverter().convert(tmp_path).document and exports Markdown.
+    Returns None if Docling is unavailable or conversion fails.
     """
     try:
-        import io as _io
-        import mimetypes
+        from docling.document_converter import DocumentConverter  # type: ignore
+        import tempfile
+        import os as _os
+        from pathlib import Path as _Path
 
+        suffix = _Path(filename).suffix or ""
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
         try:
-            # Preferred modern API
-            from docling.document_converter import DocumentConverter, InputDocument  # type: ignore
-
             converter = DocumentConverter()
-            mime, _ = mimetypes.guess_type(filename)
-            doc = InputDocument(file_like=_io.BytesIO(data), filename=filename, mime_type=mime)
-            res = converter.convert(doc)
-
-            text = getattr(res, "text", None) or getattr(res, "plaintext", None)
-            html = getattr(res, "html", None)
-            images: List[ImageRef] = []
-            if hasattr(res, "images") and res.images:
-                for im in res.images:
-                    name = getattr(im, "name", "image.png")
-                    content = getattr(im, "content", None) or getattr(im, "bytes", None)
-                    if content:
-                        url = save_image_bytes(content, name)
-                        images.append(ImageRef(url=url))
-            tables: List[TableRef] = []
-            if hasattr(res, "tables") and res.tables:
-                for tbl in res.tables:
-                    thtml = getattr(tbl, "html", None)
-                    tdata = getattr(tbl, "data", None)
-                    tables.append(TableRef(html=thtml, data=tdata))
-            meta = getattr(res, "meta", None) or {}
-
-            return ParsedBundle(text=text, html=html, images=images, tables=tables, meta=meta)
-        except Exception:
-            # Older or different API surface
+            doc = converter.convert(tmp_path).document
+            # Prefer Markdown export; fall back to str(doc)
             try:
-                from docling import Document  # type: ignore
-                d = Document.from_bytes(data, filename=filename)
-                text = getattr(d, "text", None)
-                html = getattr(d, "html", None)
-                images: List[ImageRef] = []
-                if hasattr(d, "images"):
-                    for im in d.images:
-                        content = getattr(im, "content", None) or getattr(im, "bytes", None)
-                        name = getattr(im, "name", "image.png")
-                        if content:
-                            url = save_image_bytes(content, name)
-                            images.append(ImageRef(url=url))
-                tables: List[TableRef] = []
-                if hasattr(d, "tables"):
-                    for tbl in d.tables:
-                        tables.append(TableRef(html=getattr(tbl, "html", None), data=getattr(tbl, "data", None)))
-                return ParsedBundle(text=text, html=html, images=images, tables=tables)
+                md = doc.export_to_markdown()  # type: ignore[attr-defined]
             except Exception:
-                return None
+                md = None
+            text = (md or "").strip() or str(doc)
+            return ParsedBundle(text=text, html=None, images=[], tables=[])
+        finally:
+            try:
+                _os.unlink(tmp_path)
+            except Exception:
+                pass
     except Exception:
         return None

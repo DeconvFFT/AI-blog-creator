@@ -266,10 +266,16 @@ async def parse_post(
             errors = list(result.get("errors"))
 
     if parsed is None:
-        # Fallback without graph
-        parsed = parse_with_docling(filename, data_bytes)
-        if parsed is None:
-            raise HTTPException(status_code=500, detail="Docling parsing failed; unsupported format or error")
+        # Fallback-first: try lightweight parser, then Docling
+        parsed = parse_any(filename, data_bytes)
+        def _is_empty_bundle(p: ParsedBundle | None) -> bool:
+            if p is None:
+                return True
+            return not ((p.text and p.text.strip()) or (p.html and p.html.strip()) or (p.images) or (p.tables))
+        if _is_empty_bundle(parsed):
+            parsed = parse_with_docling(filename, data_bytes)
+            if parsed is None:
+                raise HTTPException(status_code=500, detail="Docling parsing failed; unsupported format or error")
 
     # Fallback media alignment if graph failed to produce it
     if aligned_text is None and (refine_with_llm or settings.llm_parse_mode == "require"):
