@@ -34,7 +34,7 @@ fi
 # Ensure local server package is importable when invoking module entrypoint
 export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
 
-# Use the venv's python to run uvicorn for module `server.app.main`
-exec python -m uvicorn server.app.main:app --app-dir . --host 0.0.0.0 --port "${PORT:-8000}"
+# Use the venv's python to run uvicorn; set app-dir to server so `app.*` resolves
+exec python -m uvicorn app.main:app --app-dir server --host 0.0.0.0 --port "${PORT:-8000}"
 
 
