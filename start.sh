@@ -4,11 +4,16 @@ set -eu
 # Ensure we run from the repo root, then start the FastAPI server on $PORT
 cd "$(dirname "$0")/server"
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-
-if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-  echo "Python not found. Set PYTHON_BIN to your Python executable." >&2
-  exit 1
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=python3
+  elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=python
+  else
+    echo "Python not found. Set PYTHON_BIN to your Python executable." >&2
+    exit 1
+  fi
 fi
 
 # Create a lightweight venv (idempotent)
