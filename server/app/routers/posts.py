@@ -112,7 +112,7 @@ def _absolute_post_url(slug: str) -> str:
 @router.get("/feed/rss.xml")
 def rss_feed(db: Session = Depends(get_db)):
     cache_key = "feed:rss"
-    cached = cache_get := cache_json_get(cache_key)
+    cached = cache_json_get(cache_key)
     if cached:
         return Response(content=cached.get("xml", ""), media_type="application/rss+xml")
 
