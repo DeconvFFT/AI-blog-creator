@@ -16,14 +16,19 @@ if [ -z "$PYTHON_BIN" ]; then
   fi
 fi
 
-# Create a lightweight venv (idempotent)
-if [ ! -d ".venv" ]; then
-  "$PYTHON_BIN" -m venv .venv
+# Prefer the venv created by Railpack during build, fall back to local
+if [ -d "/app/.venv" ]; then
+  . /app/.venv/bin/activate
+else
+  if [ ! -d ".venv" ]; then
+    "$PYTHON_BIN" -m venv .venv
+    . .venv/bin/activate
+    pip install --upgrade pip setuptools wheel
+    pip install --no-cache-dir -r requirements.txt
+  else
+    . .venv/bin/activate
+  fi
 fi
-. .venv/bin/activate
-
-pip install --upgrade pip setuptools wheel
-pip install --no-cache-dir -r requirements.txt
 
 # Ensure local server package is importable when invoking module entrypoint
 export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
