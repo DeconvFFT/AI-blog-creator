@@ -5,7 +5,7 @@ export const metadata = {
   title: "AI Blog Platform",
   description: "Upload, parse, refine, and publish blogs",
 };
-
+ 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
