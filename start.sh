@@ -25,6 +25,10 @@ fi
 pip install --upgrade pip setuptools wheel
 pip install --no-cache-dir -r requirements.txt
 
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+# Ensure local server package is importable when invoking module entrypoint
+export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
+
+# Use the venv's python to run uvicorn so CWD is on sys.path
+exec python -m uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
 
 
