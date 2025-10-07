@@ -33,6 +33,9 @@ class Settings(BaseSettings):
             s = v.strip()
             if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
                 s = s[1:-1].strip()
+            # Treat empty strings as unset so env vars like GROQ_API_KEY="" don't disable cloud keys
+            if s == "":
+                return None
             return s.lower() if lower else s
 
         # Normalize common string envs (handles quoted values in .env)
