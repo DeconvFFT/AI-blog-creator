@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -33,6 +33,19 @@ export default function BlogListClient({ initial }: { initial: Post[] }) {
   function onPointerUp() {
     swipe.current = { id: null, startX: 0, dx: 0 };
   }
+
+  // If SSR returned an empty list (e.g., cold cache), fetch from API on mount
+  useEffect(() => {
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/posts`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data) && data.length) setPosts(data);
+      } catch {}
+    };
+    if (!initial?.length) fetchLatest();
+  }, []);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this blog? This cannot be undone.")) return;
