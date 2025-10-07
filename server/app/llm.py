@@ -22,7 +22,6 @@ class LLMClient:
     Prefers Groq (gpt-oss-120b) with fallback to Ollama (gpt-oss-20b).
     Uses Redis to cache completions keyed by input hash.
     """
-
     def __init__(self) -> None:
         self.groq_api_key = settings.groq_api_key
         self.groq_model = settings.groq_model
@@ -41,29 +40,21 @@ class LLMClient:
         if cached:
             return cached
 
-        # Try Groq (OpenAI-compatible endpoint)
+        # Try Groq using LangChain integration
         if self.groq_api_key:
             try:
-                resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.groq_api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": self.groq_model,
-                        "messages": messages,
-                        "temperature": temperature,
-                        **({"max_tokens": max_tokens} if max_tokens else {}),
-                    },
-                    timeout=60,
+                from langchain_groq import ChatGroq
+                llm = ChatGroq(
+                    groq_api_key=self.groq_api_key,
+                    model=self.groq_model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                 )
-                resp.raise_for_status()
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
+                response = llm.invoke(messages)
+                content = response.content.strip() if hasattr(response, 'content') else str(response)
                 cache_set(cache_key, content)
                 return content
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning("Groq chat failed, falling back to Ollama: %s", e)
 
         # Fallback to Ollama chat API only if explicitly configured
