@@ -50,6 +50,7 @@ class LLMClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
+                logger.info("Using Groq model: %s", self.groq_model)
                 response = llm.invoke(messages)
                 content = response.content.strip() if hasattr(response, 'content') else str(response)
                 cache_set(cache_key, content)
@@ -72,6 +73,7 @@ class LLMClient:
                 )
                 resp.raise_for_status()
                 data = resp.json()
+                logger.info("Ollama chat")
                 # Ollama streams sometimes; in chat API final response has message
                 content = data.get("message", {}).get("content") or data.get("content") or ""
                 cache_set(cache_key, content)
