@@ -4,6 +4,8 @@ import io
 import json
 import logging
 from typing import List, Optional
+import datetime as dt
+from email.utils import format_datetime
 
 import orjson
 import requests
@@ -100,6 +102,67 @@ def get_post_by_slug(slug: str, db: Session = Depends(get_db)):
     }
     cache_json_set(cache_key, obj)
     return obj
+
+
+def _absolute_post_url(slug: str) -> str:
+    base = settings.site_base_url.rstrip("/")
+    return f"{base}/blog/{slug}"
+
+
+@router.get("/feed/rss.xml")
+def rss_feed(db: Session = Depends(get_db)):
+    cache_key = "feed:rss"
+    cached = cache_get := cache_json_get(cache_key)
+    if cached:
+        return Response(content=cached.get("xml", ""), media_type="application/rss+xml")
+
+    rows = db.query(BlogPost).order_by(BlogPost.created_at.desc()).limit(50).all()
+    now = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+    items_xml = []
+    for r in rows:
+        link = _absolute_post_url(r.slug)
+        pub = r.created_at.replace(tzinfo=dt.timezone.utc) if r.created_at.tzinfo is None else r.created_at
+        desc = (r.meta or {}).get("summary") if isinstance(r.meta, dict) else None
+        desc = (desc or (r.content_text or ""))[:500]
+        items_xml.append(
+            f"<item>\n<title>{_xml_escape(r.title)}</title>\n<link>{_xml_escape(link)}</link>\n<guid>{_xml_escape(link)}</guid>\n<pubDate>{format_datetime(pub)}</pubDate>\n<description>{_xml_escape(desc)}</description>\n</item>"
+        )
+    channel = (
+        f"<channel>\n<title>{_xml_escape(settings.app_name)}</title>\n<link>{_xml_escape(settings.site_base_url)}</link>\n<lastBuildDate>{format_datetime(now)}</lastBuildDate>\n"
+        + "\n".join(items_xml)
+        + "\n</channel>"
+    )
+    xml = f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\">{channel}</rss>"
+    cache_json_set(cache_key, {"xml": xml})
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@router.get("/feed/atom.xml")
+def atom_feed(db: Session = Depends(get_db)):
+    cache_key = "feed:atom"
+    cached = cache_json_get(cache_key)
+    if cached:
+        return Response(content=cached.get("xml", ""), media_type="application/atom+xml")
+
+    rows = db.query(BlogPost).order_by(BlogPost.created_at.desc()).limit(50).all()
+    updated = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc).isoformat()
+    entries = []
+    for r in rows:
+        link = _absolute_post_url(r.slug)
+        up = r.updated_at or r.created_at
+        up = up.replace(tzinfo=dt.timezone.utc).isoformat()
+        summary = (r.meta or {}).get("summary") if isinstance(r.meta, dict) else None
+        summary = summary or (r.content_text or "")[:500]
+        entries.append(
+            f"<entry>\n<title>{_xml_escape(r.title)}</title>\n<link href=\"{_xml_escape(link)}\"/>\n<id>{_xml_escape(link)}</id>\n<updated>{up}</updated>\n<summary>{_xml_escape(summary)}</summary>\n</entry>"
+        )
+    feed = (
+        f"<feed xmlns=\"http://www.w3.org/2005/Atom\">\n<title>{_xml_escape(settings.app_name)}</title>\n<link href=\"{_xml_escape(settings.site_base_url)}\"/>\n<updated>{updated}</updated>\n"
+        + "\n".join(entries)
+        + "\n</feed>"
+    )
+    cache_json_set(cache_key, {"xml": feed})
+    return Response(content=feed, media_type="application/atom+xml")
 
 
 @router.post("/posts/external", response_model=PostOut)
