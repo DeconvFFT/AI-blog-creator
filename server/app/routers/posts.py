@@ -277,11 +277,13 @@ async def parse_post(
             if parsed is None:
                 raise HTTPException(status_code=500, detail="Docling parsing failed; unsupported format or error")
 
-    # Fallback media alignment if graph failed to produce it
+    # Media alignment: run when media exists, even if OCR produced no base text
     if aligned_text is None and (refine_with_llm or settings.llm_parse_mode == "require"):
         has_media = bool((parsed.images or []) or (parsed.tables or []))
         base_text = (parsed.text or parsed.html or "").strip()
-        if has_media and base_text:
+        if has_media:
+            if not base_text:
+                base_text = "(no extracted text; align media using image alts and manifest)"
             lines: list[str] = []
             if parsed.images:
                 for i, im in enumerate(parsed.images, start=1):
