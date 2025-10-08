@@ -315,6 +315,20 @@ async def parse_post(
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ])
+            # Fallback: if LLM failed or returned empty, at least embed images as markdown
+            if (not aligned_text or not aligned_text.strip()) and parsed.images:
+                md_lines: list[str] = []
+                for im in parsed.images:
+                    if isinstance(im, dict):
+                        url = im.get("url") or ""
+                        alt = im.get("alt") or "image"
+                    else:
+                        url = getattr(im, "url", "") or ""
+                        alt = getattr(im, "alt", None) or "image"
+                    if url:
+                        md_lines.append(f"![{alt}]({url})")
+                if md_lines:
+                    aligned_text = "\n\n".join(md_lines)
 
     # Fallback refine if not produced by graph
     if refined_text is None and (refine_with_llm or settings.llm_parse_mode == "require"):

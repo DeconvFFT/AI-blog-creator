@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from bs4 import BeautifulSoup
 from PIL import Image
 import io as _io
-import pytesseract
+from rapidocr_onnxruntime import RapidOCR
 import csv as _csv
 import json as _json
 from openpyxl import load_workbook
@@ -80,16 +80,23 @@ def _parse_html(data: bytes) -> ParsedBundle:
 
 
 def _parse_image_ocr(filename: str, data: bytes) -> ParsedBundle:
-    # Save original image to static and run OCR over it
+    # Save original image to static and run OCR using RapidOCR (lightweight ONNX runtime)
     try:
+        ocr = RapidOCR()
+        # RapidOCR accepts numpy array or file path; pass bytes via PIL -> np
         im = Image.open(_io.BytesIO(data))
-        # Convert to RGB to avoid mode issues
-        if im.mode not in ("RGB", "L"):
-            im = im.convert("RGB")
-        text = pytesseract.image_to_string(im)
+        import numpy as _np
+        arr = _np.array(im.convert("RGB"))
+        result, _ = ocr(arr)
+        # result: list of [box, text, score]
+        lines: list[str] = []
+        if isinstance(result, list):
+            for item in result:
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    lines.append(str(item[1] or "").strip())
+        text = "\n".join([t for t in lines if t])
     except Exception:
         text = ""
-    # Persist image for later embedding
     url = save_image_bytes(data, Path(filename).name or "image.png")
     images = [ImageRef(url=url)]
     return ParsedBundle(text=text.strip(), images=images)
