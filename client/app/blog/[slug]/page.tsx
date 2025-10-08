@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import ShareBar from "../../../components/ShareBar";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 // Split bases: SSR fetch base vs. public absolute base used in rendered HTML
 const SSR_API_BASE = (process.env.NODE_ENV === 'development')
@@ -17,14 +18,15 @@ const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === 
 
 async function fetchPost(slug: string) {
   const res = await fetch(`${SSR_API_BASE}/api/posts/slug/${slug}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Not found');
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   try {
     const post = await fetchPost(params.slug);
-    const title = post.title || "Blog";
+    const title = (post && post.title) || "Blog";
     const description = (post.summary || "").slice(0, 180) || "Read this post";
     const url = SITE_BASE ? `${SITE_BASE}/blog/${params.slug}` : undefined;
   const firstImg = Array.isArray(post.images) && post.images.length > 0 ? post.images[0].url : undefined;
@@ -52,6 +54,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
 export default async function BlogPost({ params }: { params: { slug: string } }) {
   const post = await fetchPost(params.slug);
+  if (post == null) return notFound();
   let contentHtml: string | null = post.content_html || null;
   if (contentHtml) {
     // Rewrite legacy /static paths to Redis-backed endpoints, then absolutize to public API
@@ -63,6 +66,7 @@ export default async function BlogPost({ params }: { params: { slug: string } })
   }
   const contentMd: string = post.content_text || '';
   const shareUrl = SITE_BASE ? `${SITE_BASE}/blog/${post.slug}` : '';
+  const sitePdfUrl = SITE_BASE ? `${SITE_BASE}/blog/${post.slug}/pdf` : `/blog/${post.slug}/pdf`;
   return (
     <main>
       <div style={{ marginBottom: 12 }}>
@@ -77,7 +81,7 @@ export default async function BlogPost({ params }: { params: { slug: string } })
         <div className="card-body">
           <h1 style={{ marginTop: 0 }}>{post.title}</h1>
           <div style={{ margin: '6px 0 12px 0' }}>
-            <ShareBar url={shareUrl} title={post.title} />
+            <ShareBar url={shareUrl} title={post.title} pdfUrl={sitePdfUrl} />
           </div>
           {contentHtml ? (
             <article dangerouslySetInnerHTML={{ __html: contentHtml }} />

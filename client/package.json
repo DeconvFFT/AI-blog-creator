@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000"
+    "start": "next start -p 3000",
+    "postbuild": "node ./scripts/generate-pdfs.js || echo 'pdf gen skipped'",
+    "pdf:gen": "node ./scripts/generate-pdfs.js",
+    "pdf:gen:one": "node ./scripts/generate-pdfs.js --slug"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.17.6",
+    "puppeteer": "22.15.0",
     "next": "14.2.5",
     "react": "18.2.0",
     "react-dom": "18.2.0",

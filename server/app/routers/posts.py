@@ -144,14 +144,7 @@ def get_post_pdf(post_id: str, db: Session = Depends(get_db)):
     row = db.get(BlogPost, post_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
-    post_obj = {
-        "title": row.title,
-        "content_text": row.content_text,
-        "images": row.images or [],
-    }
-    md = _post_to_markdown(post_obj)
-    pdf_bytes = _render_pdf_from_md(md)
-    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=\"{row.slug or 'post'}.pdf\""})
+    return _generate_post_pdf(row)
 
 
 @router.get("/posts/slug/{slug}", response_model=PostOut)
@@ -178,6 +171,29 @@ def get_post_by_slug(slug: str, db: Session = Depends(get_db)):
     }
     cache_json_set(cache_key, obj)
     return obj
+
+
+@router.get("/posts/slug/{slug}/pdf")
+def get_post_pdf_by_slug(slug: str, db: Session = Depends(get_db)):
+    row = db.query(BlogPost).filter(BlogPost.slug == slug).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found")
+    return _generate_post_pdf(row)
+
+
+def _generate_post_pdf(row: BlogPost) -> Response:
+    post_obj = {
+        "title": row.title,
+        "content_text": row.content_text,
+        "images": row.images or [],
+    }
+    md = _post_to_markdown(post_obj)
+    pdf_bytes = _render_pdf_from_md(md)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=\"{row.slug or 'post'}.pdf\""},
+    )
 
 
 def _absolute_post_url(slug: str) -> str:

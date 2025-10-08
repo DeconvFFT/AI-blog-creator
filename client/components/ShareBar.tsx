@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export default function ShareBar({ url, title }: { url: string; title: string }) {
+export default function ShareBar({ url, title, pdfUrl }: { url: string; title: string; pdfUrl?: string }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -17,19 +17,22 @@ export default function ShareBar({ url, title }: { url: string; title: string })
 
   const shareNative = useCallback(async () => {
     try {
-      if ((navigator as any).share && url) {
-        await (navigator as any).share({ title, url });
+      const targetUrl = pdfUrl || url;
+      if ((navigator as any).share && targetUrl) {
+        await (navigator as any).share({ title, url: targetUrl });
         setOpen(false);
       } else {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(targetUrl);
         alert("Link copied");
         setOpen(false);
       }
     } catch {}
-  }, [url, title]);
+  }, [url, pdfUrl, title]);
 
   const encodedUrl = encodeURIComponent(url || "");
   const encodedTitle = encodeURIComponent(title || "");
+  const pdf = pdfUrl || url;
+  const encodedPdf = encodeURIComponent(pdf);
 
   return (
     <div ref={boxRef} style={{ position: 'relative', display: 'inline-block' }}>
@@ -54,11 +57,11 @@ export default function ShareBar({ url, title }: { url: string; title: string })
         >
           <div style={{ display: 'grid', gap: 8 }}>
             <button className="btn" onClick={shareNative}>Quick share</button>
-            <a className="btn" href={`${url}.pdf`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on X</a>
-            <a className="btn" href={`${url}.pdf`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on LinkedIn</a>
-            <a className="btn" href={`${url}.pdf`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on WhatsApp</a>
-            <a className="btn" href={`mailto:?subject=${encodedTitle}&body=${encodeURIComponent(url + '.pdf')}`} onClick={() => setOpen(false)}>Email</a>
-            <button className="btn" onClick={async () => { await navigator.clipboard.writeText(url); alert('Link copied'); setOpen(false); }}>Copy link</button>
+            <a className="btn" href={`https://twitter.com/intent/tweet?url=${encodedPdf}&text=${encodedTitle}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on X</a>
+            <a className="btn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedPdf}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on LinkedIn</a>
+            <a className="btn" href={`https://wa.me/?text=${encodedTitle}%20${encodedPdf}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on WhatsApp</a>
+            <a className="btn" href={`mailto:?subject=${encodedTitle}&body=${encodedPdf}`} onClick={() => setOpen(false)}>Email</a>
+            <button className="btn" onClick={async () => { await navigator.clipboard.writeText(pdf); alert('Link copied'); setOpen(false); }}>Copy link</button>
           </div>
         </div>
       ) : null}
