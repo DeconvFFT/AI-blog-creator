@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import Response
+import mimetypes
 
 from .config import settings
 from .db import Base, engine
@@ -44,15 +45,26 @@ def on_startup():
     app.mount("/static", StaticFiles(directory=static_dir, html=False), name="static")
 
     # Serve binary assets from Redis at /static-redis/{key}
-    from .cache import cache_bytes_get
+    from .cache import cache_bytes_get, cache_bytes_set
 
     @app.get("/static-redis/{key:path}")
     def get_static_redis(key: str, request: Request):
         data = cache_bytes_get(key)
         if data is None:
-            return Response(status_code=404)
-        # naive content-type; clients usually render by extension in Markdown
-        return Response(content=data, media_type="application/octet-stream")
+            # Lazy-migrate legacy disk files into Redis for backward compatibility
+            try:
+                prefix, name = (key.split(":", 1) + [""])[:2]
+                base_dir = static_dir / ("images" if prefix == "image" else "uploads")
+                cand = base_dir / name
+                if cand.exists() and cand.is_file():
+                    data = cand.read_bytes()
+                    cache_bytes_set(key, data)
+                else:
+                    return Response(status_code=404)
+            except Exception:
+                return Response(status_code=404)
+        ctype, _ = mimetypes.guess_type(key)
+        return Response(content=data, media_type=ctype or "application/octet-stream")
 
 
 @app.get("/")
