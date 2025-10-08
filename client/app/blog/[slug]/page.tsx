@@ -106,11 +106,27 @@ export default async function BlogPost({ params }: { params: { slug: string } })
         <section className="section">
           <h3>Images</h3>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
-            {post.images.map((img: any, i: number) => (
-              <div key={i} className="sticker" style={{ padding: 8 }}>
-                <img src={(img.url || '').startsWith('http') ? img.url : `${PUBLIC_API_BASE}${img.url}`} alt={img.alt || ''} style={{ width: '100%', height: 160, objectFit: 'cover' }} />
-              </div>
-            ))}
+            {post.images.map((img: any, i: number) => {
+              let src = String(img.url || '');
+              if (!src.startsWith('http')) {
+                if (src.startsWith('/static/images/')) {
+                  const name = src.split('/').pop();
+                  src = `${PUBLIC_API_BASE}/static-redis/image:${name}`;
+                } else if (src.startsWith('/static/uploads/')) {
+                  const name = src.split('/').pop();
+                  src = `${PUBLIC_API_BASE}/static-redis/upload:${name}`;
+                } else if (src.startsWith('/static-redis/')) {
+                  src = `${PUBLIC_API_BASE}${src}`;
+                } else {
+                  src = `${PUBLIC_API_BASE}${src}`;
+                }
+              }
+              return (
+                <div key={i} className="sticker" style={{ padding: 8 }}>
+                  <img src={src} alt={img.alt || ''} style={{ width: '100%', height: 160, objectFit: 'cover' }} />
+                </div>
+              );
+            })}
           </div>
         </section>
       ) : null}
