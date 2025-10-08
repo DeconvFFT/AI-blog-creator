@@ -80,6 +80,13 @@ def cache_bytes_get(key: str) -> Optional[bytes]:
 def cache_bytes_set(key: str, value: bytes, ttl: Optional[int] = None) -> None:
     try:
         r = get_redis_bytes()
-        r.set(key, value, ex=ttl or settings.redis_cache_ttl_seconds)
+        # Allow binary assets to persist longer (or indefinitely when configured)
+        effective_ttl = ttl
+        if effective_ttl is None:
+            effective_ttl = settings.redis_binary_ttl_seconds if settings.redis_binary_ttl_seconds > 0 else None
+        if effective_ttl is None:
+            r.set(key, value)
+        else:
+            r.set(key, value, ex=effective_ttl)
     except Exception as e:  # noqa: BLE001
         logger.debug("cache_bytes_set error: %s", e)

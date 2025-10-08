@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     redis_cache_ttl_seconds: int = Field(default=86400, alias="REDIS_CACHE_TTL_SECONDS")
+    # Binary assets (images/uploads) in Redis: 0 = no expiry
+    redis_binary_ttl_seconds: int = Field(default=0, alias="REDIS_BINARY_TTL_SECONDS")
 
     groq_api_key: str | None = Field(default=None, alias="GROQ_API_KEY")
     groq_model: str = Field(default="llama3-8b-8192", alias="GROQ_MODEL")
