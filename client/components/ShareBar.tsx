@@ -61,7 +61,7 @@ export default function ShareBar({ url, title, pdfUrl }: { url: string; title: s
             <a className="btn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedPdf}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on LinkedIn</a>
             <a className="btn" href={`https://wa.me/?text=${encodedTitle}%20${encodedPdf}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on WhatsApp</a>
             <a className="btn" href={`mailto:?subject=${encodedTitle}&body=${encodedPdf}`} onClick={() => setOpen(false)}>Email</a>
-            <button className="btn" onClick={async () => { await navigator.clipboard.writeText(pdf); alert('Link copied'); setOpen(false); }}>Copy link</button>
+            <button className="btn" onClick={async () => { await navigator.clipboard.writeText(url); alert('Link copied'); setOpen(false); }}>Copy link</button>
           </div>
         </div>
       ) : null}

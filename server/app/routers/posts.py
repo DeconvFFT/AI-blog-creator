@@ -49,51 +49,204 @@ def _post_to_markdown(post: dict) -> str:
     return "\n\n".join(lines)
 
 def _render_pdf_from_md(md: str) -> bytes:
-    # Minimal MD→PDF: treat as plaintext with simple image blocks
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.utils import ImageReader
+    """Render Markdown to a nicely formatted PDF using ReportLab Platypus.
+
+    Supported:
+    - Headings (#, ##, ###)
+    - Paragraphs with bold/italic/links
+    - Unordered/ordered lists
+    - Fenced code blocks (```)
+    - GitHub-style pipe tables
+    - Image blocks ![alt](url)
+    """
     import io as _io
     import re as _re
+    from xml.sax.saxutils import escape as _xml_escape
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Image as RLImage,
+        Table,
+        TableStyle,
+        ListFlowable,
+        ListItem,
+        Preformatted,
+    )
 
     buf = _io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    width, height = letter
-    y = height - 72
-    # Extract image markdown and split text
-    tokens = []
-    pos = 0
-    for m in _re.finditer(r"!\[[^\]]*\]\(([^)]+)\)", md):
-        if m.start() > pos:
-            tokens.append(("text", md[pos:m.start()]))
-        tokens.append(("img", m.group(1)))
-        pos = m.end()
-    if pos < len(md):
-        tokens.append(("text", md[pos:]))
-    # Render
-    for kind, data in tokens:
-        if kind == "text":
-            for line in str(data).splitlines():
-                c.drawString(72, y, line[:1000])
-                y -= 14
-                if y < 72:
-                    c.showPage(); y = height - 72
-        else:
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=letter,
+        leftMargin=54,
+        rightMargin=54,
+        topMargin=54,
+        bottomMargin=54,
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="H1", parent=styles["Heading1"], spaceAfter=10))
+    styles.add(ParagraphStyle(name="H2", parent=styles["Heading2"], spaceAfter=8))
+    styles.add(ParagraphStyle(name="H3", parent=styles["Heading3"], spaceAfter=6))
+    styles.add(ParagraphStyle(name="Body", parent=styles["BodyText"], leading=16, spaceAfter=6))
+    styles.add(ParagraphStyle(name="CodeBlock", fontName="Courier", fontSize=9, leading=12, backColor=colors.whitesmoke, leftIndent=6, rightIndent=6, spaceAfter=8))
+
+    content: list = []
+
+    def _inline(txt: str) -> str:
+        # Convert simple Markdown inline to ReportLab's mini-HTML
+        s = _xml_escape(txt)
+        s = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
+        s = _re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", s)
+        s = _re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"<link href='\2'>\1</link>", s)
+        return s
+
+    lines = md.splitlines()
+    i = 0
+    in_code = False
+    code_lines: list[str] = []
+
+    def _flush_code():
+        nonlocal code_lines
+        if code_lines:
+            content.append(Preformatted("\n".join(code_lines), styles["CodeBlock"]))
+            code_lines = []
+
+    # Helpers for list accumulation
+    def _collect_list(start: int, ordered: bool) -> tuple[int, ListFlowable]:
+        items: list = []
+        j = start
+        pat = r"^\s*(?:\d+\.|[-*+])\s+(.+)$"
+        while j < len(lines):
+            m = _re.match(pat, lines[j])
+            if not m:
+                break
+            items.append(ListItem(Paragraph(_inline(m.group(1)), styles["Body"])) )
+            j += 1
+        lf = ListFlowable(
+            items,
+            bulletType='1' if ordered else 'bullet',
+            start='1',
+            leftIndent=18,
+            bulletFontName='Helvetica',
+        )
+        return j, lf
+
+    def _collect_table(start: int) -> tuple[int, Table | None]:
+        # Expect header | a | b |, separator |---|---|, then rows
+        header_line = lines[start]
+        if '|' not in header_line:
+            return start, None
+        if start + 1 >= len(lines):
+            return start, None
+        sep_line = lines[start + 1]
+        if not _re.search(r"\|\s*:?[-]{2,}\s*\|", sep_line):
+            return start, None
+        def split_row(s: str) -> list[str]:
+            parts = [p.strip() for p in s.strip().strip('|').split('|')]
+            return parts
+        header = split_row(header_line)
+        j = start + 2
+        rows: list[list[str]] = []
+        while j < len(lines) and '|' in lines[j] and not lines[j].strip().startswith('#'):
+            rows.append(split_row(lines[j]))
+            j += 1
+        data = [header] + rows
+        tbl = Table(data, hAlign='LEFT')
+        tbl.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        return j, tbl
+
+    while i < len(lines):
+        line = lines[i]
+        # Fenced code blocks
+        if line.strip().startswith("```"):
+            if not in_code:
+                in_code = True
+                code_lines = []
+            else:
+                in_code = False
+                _flush_code()
+            i += 1
+            continue
+        if in_code:
+            code_lines.append(line)
+            i += 1
+            continue
+
+        # Headings
+        if line.startswith("### "):
+            content.append(Paragraph(_inline(line[4:].strip()), styles["H3"]))
+            i += 1; continue
+        if line.startswith("## "):
+            content.append(Paragraph(_inline(line[3:].strip()), styles["H2"]))
+            i += 1; continue
+        if line.startswith("# "):
+            content.append(Paragraph(_inline(line[2:].strip()), styles["H1"]))
+            i += 1; continue
+
+        # Images as standalone blocks
+        mimg = _re.match(r"^!\[[^\]]*\]\(([^)]+)\)\s*$", line.strip())
+        if mimg:
+            url = mimg.group(1)
             try:
-                img = ImageReader(data)
-                iw, ih = img.getSize()
-                scale = min((width - 144) / iw, 300 / ih)
-                w, h = iw * scale, ih * scale
-                c.drawImage(img, 72, max(72, y - h), width=w, height=h, preserveAspectRatio=True, anchor='sw')
-                y -= (h + 12)
-                if y < 72:
-                    c.showPage(); y = height - 72
+                resp = requests.get(url, timeout=15)
+                resp.raise_for_status()
+                bio = _io.BytesIO(resp.content)
+                img = RLImage(bio)
+                max_w = 450
+                iw, ih = img.wrap(0, 0)
+                scale = min(max_w / max(iw, 1), 1.0)
+                img._restrictSize(max_w, 320)
+                content.append(img)
+                content.append(Spacer(1, 8))
             except Exception:
-                # fallback: print image URL as text
-                c.drawString(72, y, f"[image] {data}"); y -= 14
-                if y < 72:
-                    c.showPage(); y = height - 72
-    c.save()
+                content.append(Paragraph(_inline(f"[image] {url}"), styles["Body"]))
+            i += 1; continue
+
+        # Tables
+        j, tbl = _collect_table(i)
+        if tbl is not None and j > i:
+            content.append(tbl)
+            content.append(Spacer(1, 8))
+            i = j
+            continue
+
+        # Lists
+        if _re.match(r"^\s*[-*+]\s+", line):
+            j, lf = _collect_list(i, ordered=False)
+            content.append(lf)
+            content.append(Spacer(1, 4))
+            i = j
+            continue
+        if _re.match(r"^\s*\d+\.\s+", line):
+            j, lf = _collect_list(i, ordered=True)
+            content.append(lf)
+            content.append(Spacer(1, 4))
+            i = j
+            continue
+
+        # Blank line → spacing
+        if not line.strip():
+            content.append(Spacer(1, 6))
+            i += 1
+            continue
+
+        # Paragraph
+        content.append(Paragraph(_inline(line.strip()), styles["Body"]))
+        i += 1
+
+    _flush_code()
+    doc.build(content)
     return buf.getvalue()
 
 

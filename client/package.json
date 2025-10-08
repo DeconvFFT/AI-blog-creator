@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p 3000",
-    "postbuild": "node ./scripts/generate-pdfs.js || echo 'pdf gen skipped'",
+    "postbuild": "echo 'skip pdf gen'",
     "pdf:gen": "node ./scripts/generate-pdfs.js",
     "pdf:gen:one": "node ./scripts/generate-pdfs.js --slug"
   },
