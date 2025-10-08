@@ -110,11 +110,11 @@ export default async function BlogPost({ params }: { params: { slug: string } })
               let src = String(img.url || '');
               if (!src.startsWith('http')) {
                 if (src.startsWith('/static/images/')) {
-                  const name = src.split('/').pop();
-                  src = `${PUBLIC_API_BASE}/static-redis/image:${name}`;
+                  const pathAfterPrefix = src.substring('/static/images/'.length);
+                  src = `${PUBLIC_API_BASE}/static-redis/image:${pathAfterPrefix}`;
                 } else if (src.startsWith('/static/uploads/')) {
-                  const name = src.split('/').pop();
-                  src = `${PUBLIC_API_BASE}/static-redis/upload:${name}`;
+                  const pathAfterPrefix = src.substring('/static/uploads/'.length);
+                  src = `${PUBLIC_API_BASE}/static-redis/upload:${pathAfterPrefix}`;
                 } else if (src.startsWith('/static-redis/')) {
                   src = `${PUBLIC_API_BASE}${src}`;
                 } else {
@@ -123,7 +123,11 @@ export default async function BlogPost({ params }: { params: { slug: string } })
               }
               return (
                 <div key={i} className="sticker" style={{ padding: 8 }}>
-                  <img src={src} alt={img.alt || ''} style={{ width: '100%', height: 160, objectFit: 'cover' }} />
+                  <img
+                    src={src}
+                    alt={img.alt || ''}
+                    style={{ width: '100%', height: 160, objectFit: 'cover' }}
+                  />
                 </div>
               );
             })}
