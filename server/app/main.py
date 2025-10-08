@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi import Request
+from fastapi.responses import Response
 
 from .config import settings
 from .db import Base, engine
@@ -40,6 +42,17 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
     static_dir = Path(settings.storage_dir)
     app.mount("/static", StaticFiles(directory=static_dir, html=False), name="static")
+
+    # Serve binary assets from Redis at /static-redis/{key}
+    from .cache import cache_bytes_get
+
+    @app.get("/static-redis/{key:path}")
+    def get_static_redis(key: str, request: Request):
+        data = cache_bytes_get(key)
+        if data is None:
+            return Response(status_code=404)
+        # naive content-type; clients usually render by extension in Markdown
+        return Response(content=data, media_type="application/octet-stream")
 
 
 @app.get("/")

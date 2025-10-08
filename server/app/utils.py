@@ -9,6 +9,7 @@ from typing import Tuple
 from slugify import slugify
 
 from .config import settings
+from .cache import cache_bytes_get, cache_bytes_set
 
 
 def ensure_storage() -> Path:
@@ -26,21 +27,17 @@ def safe_filename(name: str) -> str:
 
 
 def save_upload(fileobj, filename: str) -> Tuple[str, Path]:
-    ensure_storage()
-    fname = safe_filename(filename)
-    dest = Path(settings.storage_dir) / "uploads" / fname
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(fileobj, f)
-    return f"/static/uploads/{fname}", dest
+    # Store raw bytes in Redis under a unique key; serve via /static-redis/
+    data = fileobj.read()
+    key = f"upload:{safe_filename(filename)}"
+    cache_bytes_set(key, data)
+    return f"/static-redis/{key}", Path(key)
 
 
 def save_image_bytes(content: bytes, original_name: str) -> str:
-    ensure_storage()
-    fname = safe_filename(original_name)
-    dest = Path(settings.storage_dir) / "images" / fname
-    with open(dest, "wb") as f:
-        f.write(content)
-    return f"/static/images/{fname}"
+    key = f"image:{safe_filename(original_name)}"
+    cache_bytes_set(key, content)
+    return f"/static-redis/{key}"
 
 
 def make_slug(title: str) -> str:
