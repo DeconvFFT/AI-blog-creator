@@ -353,9 +353,10 @@ function ExcalidrawBox() {
   );
 }
   function absolutizeMarkdownImages(md: string): string {
-    // Replace ![alt](/static/...) with absolute URL using API_BASE
-    return md.replace(/!\[([^\]]*)\]\((\s*\/static[^)\s]*)\)/g, (_m, alt, path) => {
-      const url = `${API_BASE}${String(path).trim()}`;
-      return `![${alt}](${url})`;
-    });
+    // Rewrite legacy static paths to Redis-backed, then absolutize
+    let s = md
+      .replace(/!\[([^\]]*)\]\((\s*\/static\/images\/[^)\s]*)\)/g, (_m, alt, path) => `![${alt}](${API_BASE}/static-redis/image:${String(path).trim().split('/').pop()})`)
+      .replace(/!\[([^\]]*)\]\((\s*\/static\/uploads\/[^)\s]*)\)/g, (_m, alt, path) => `![${alt}](${API_BASE}/static-redis/upload:${String(path).trim().split('/').pop()})`);
+    s = s.replace(/!\[([^\]]*)\]\((\s*\/static[^)\s]*)\)/g, (_m, alt, path) => `![${alt}](${API_BASE}${String(path).trim()})`);
+    return s;
   }

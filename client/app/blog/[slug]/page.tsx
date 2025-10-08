@@ -5,8 +5,10 @@ import remarkGfm from "remark-gfm";
 import ShareBar from "../../../components/ShareBar";
 import type { Metadata } from "next";
 
-// Use docker network name for SSR to reach FastAPI from the Node container
-const API_BASE = process.env.SERVER_API_BASE_URL || (process.env.NODE_ENV === 'development' ? "http://server:8000" : (process.env.NEXT_PUBLIC_API_BASE_URL || ""));
+// In dev (Docker), prefer server container; in prod (Netlify), prefer public URL
+const API_BASE = (process.env.NODE_ENV === 'development')
+  ? (process.env.SERVER_API_BASE_URL || "http://server:8000")
+  : (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.SERVER_API_BASE_URL || "");
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === 'development' ? "http://localhost:3001" : "");
 
 async function fetchPost(slug: string) {
@@ -48,7 +50,11 @@ export default async function BlogPost({ params }: { params: { slug: string } })
   const post = await fetchPost(params.slug);
   let contentHtml: string | null = post.content_html || null;
   if (contentHtml) {
-    contentHtml = contentHtml.replace(/src\s*=\s*"\s*\/static/gi, `src="${API_BASE}/static`);
+    // Rewrite legacy /static paths to Redis-backed endpoints, then absolutize
+    contentHtml = contentHtml
+      .replace(/src\s*=\s*"\s*\/static\/images\/([^"\s>]+)/gi, (_m, fname) => `src="${API_BASE}/static-redis/image:${fname}`)
+      .replace(/src\s*=\s*"\s*\/static\/uploads\/([^"\s>]+)/gi, (_m, fname) => `src="${API_BASE}/static-redis/upload:${fname}`)
+      .replace(/src\s*=\s*"\s*\/static/gi, `src="${API_BASE}/static`);
   }
   const contentMd: string = post.content_text || '';
   const shareUrl = SITE_BASE ? `${SITE_BASE}/blog/${post.slug}` : '';
