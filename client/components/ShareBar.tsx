@@ -54,10 +54,10 @@ export default function ShareBar({ url, title }: { url: string; title: string })
         >
           <div style={{ display: 'grid', gap: 8 }}>
             <button className="btn" onClick={shareNative}>Quick share</button>
-            <a className="btn" href={`https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on X</a>
-            <a className="btn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on LinkedIn</a>
-            <a className="btn" href={`https://wa.me/?text=${encodedTitle}%20${encodedUrl}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on WhatsApp</a>
-            <a className="btn" href={`mailto:?subject=${encodedTitle}&body=${encodedUrl}`} onClick={() => setOpen(false)}>Share via Email</a>
+            <a className="btn" href={`${url}.pdf`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on X</a>
+            <a className="btn" href={`${url}.pdf`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on LinkedIn</a>
+            <a className="btn" href={`${url}.pdf`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Share on WhatsApp</a>
+            <a className="btn" href={`mailto:?subject=${encodedTitle}&body=${encodeURIComponent(url + '.pdf')}`} onClick={() => setOpen(false)}>Email</a>
             <button className="btn" onClick={async () => { await navigator.clipboard.writeText(url); alert('Link copied'); setOpen(false); }}>Copy link</button>
           </div>
         </div>

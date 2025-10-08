@@ -35,6 +35,67 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api", tags=["posts"])
+def _post_to_markdown(post: dict) -> str:
+    title = (post.get("title") or "Untitled").strip()
+    lines = [f"# {title}"]
+    if post.get("content_text"):
+        lines.append(str(post["content_text"]))
+    if post.get("images"):
+        for im in post["images"]:
+            url = (im.get("url") if isinstance(im, dict) else getattr(im, "url", "")) or ""
+            alt = (im.get("alt") if isinstance(im, dict) else getattr(im, "alt", None)) or "image"
+            if url:
+                lines.append(f"\n![{alt}]({url})\n")
+    return "\n\n".join(lines)
+
+def _render_pdf_from_md(md: str) -> bytes:
+    # Minimal MD→PDF: treat as plaintext with simple image blocks
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    import io as _io
+    import re as _re
+
+    buf = _io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+    y = height - 72
+    # Extract image markdown and split text
+    tokens = []
+    pos = 0
+    for m in _re.finditer(r"!\[[^\]]*\]\(([^)]+)\)", md):
+        if m.start() > pos:
+            tokens.append(("text", md[pos:m.start()]))
+        tokens.append(("img", m.group(1)))
+        pos = m.end()
+    if pos < len(md):
+        tokens.append(("text", md[pos:]))
+    # Render
+    for kind, data in tokens:
+        if kind == "text":
+            for line in str(data).splitlines():
+                c.drawString(72, y, line[:1000])
+                y -= 14
+                if y < 72:
+                    c.showPage(); y = height - 72
+        else:
+            try:
+                img = ImageReader(data)
+                iw, ih = img.getSize()
+                scale = min((width - 144) / iw, 300 / ih)
+                w, h = iw * scale, ih * scale
+                c.drawImage(img, 72, max(72, y - h), width=w, height=h, preserveAspectRatio=True, anchor='sw')
+                y -= (h + 12)
+                if y < 72:
+                    c.showPage(); y = height - 72
+            except Exception:
+                # fallback: print image URL as text
+                c.drawString(72, y, f"[image] {data}"); y -= 14
+                if y < 72:
+                    c.showPage(); y = height - 72
+    c.save()
+    return buf.getvalue()
+
 
 
 @router.get("/health")
@@ -76,6 +137,21 @@ def get_post(post_id: str, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
     return row
+
+
+@router.get("/posts/{post_id}/pdf")
+def get_post_pdf(post_id: str, db: Session = Depends(get_db)):
+    row = db.get(BlogPost, post_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found")
+    post_obj = {
+        "title": row.title,
+        "content_text": row.content_text,
+        "images": row.images or [],
+    }
+    md = _post_to_markdown(post_obj)
+    pdf_bytes = _render_pdf_from_md(md)
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=\"{row.slug or 'post'}.pdf\""})
 
 
 @router.get("/posts/slug/{slug}", response_model=PostOut)
